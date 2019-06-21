@@ -77,6 +77,86 @@ def plot_linearity(positions, axes, marker, color):
     for joint_i in range(6):
         axes.plot([p[2] for p in positions], [p[joint_i] for p in positions], marker=marker, color=color)
 
+def fit_cubic_splines(positions, velocities, accelerations, times, intermediates=False):
+    new_positions = np.array([])
+    new_times = np.array([])
+    for joint_i in range(6):
+        pos = np.array([])
+        new_times = np.array([])
+        t_last = 0
+        q = np.zeros((4*(len(times) - 1), 4*(len(times) - 1)))
+        x = np.zeros((4*(len(times) - 1), 1))
+
+        # Construct system of equations
+        for point_i in range(len(times)):
+            if point_i is 0:
+                q[:2, :4] = np.array([[        0.0,        0.0,        0.0,        1.0],
+                                      [        0.0,        0.0,        1.0,        0.0]])
+                p1 = positions[point_i]
+                v1 = velocities[point_i]
+                x[:2, :] = np.array([[ p1[joint_i] ], # position at node i
+                                     [ v1[joint_i] ]]) # acceleration at node i
+            elif point_i is (len(times) - 1):
+                dt = times[point_i] - times[point_i-1]
+                dta = np.array([dt**3, dt**2, dt, 1])
+                q[2+4*(point_i-1):, 4*(point_i-1):] = np.array([[  1.0*dta[0],  1.0*dta[1],  1.0*dta[2],  1.0*dta[3]],
+                                                                [  3.0*dta[1],  2.0*dta[2],  1.0*dta[3],         0.0]])
+                p1 = positions[point_i]
+                v1 = velocities[point_i]
+                a1 = accelerations[point_i]
+                x[2+4*(point_i-1):, :] = np.array([[ p1[joint_i] ], # position at node i
+                                                   [ v1[joint_i] ]]) # acceleration at node i
+            else:
+                dt = times[point_i] - times[point_i-1]
+                dta = np.array([dt**3, dt**2, dt, 1])
+                q[2+4*(point_i-1):2+4*point_i, 4*(point_i-1):4*(point_i+1)] = np.array([[  1.0*dta[0],  1.0*dta[1],  1.0*dta[2],  1.0*dta[3],        0.0,        0.0,        0.0,       -1.0],
+                                                                                        [  3.0*dta[1],  2.0*dta[2],  1.0*dta[3],         0.0,        0.0,        0.0,       -1.0,        0.0],
+                                                                                        [  6.0*dta[2],  2.0*dta[3],         0.0,         0.0,        0.0,       -2.0,        0.0,        0.0],
+                                                                                        [         0.0,         0.0,         0.0,         0.0,        0.0,        0.0,        0.0,        1.0]])
+
+                p1 = positions[point_i]
+                x[2+4*(point_i-1):2+4*point_i, :] = np.array([[ 0 ],
+                                                              [ 0 ],
+                                                              [ 0 ],
+                                                              [ p1[joint_i] ]]) # position at node i
+        # Solve system of equations
+        parameters = np.dot(np.linalg.inv(q), x).flatten()
+
+        if intermediates is True:
+            for point_i in range(len(times) -1):
+                v = parameters[6*point_i:6*(point_i+1)]
+                poly = np.poly1d(v)
+                subset_times = np.arange(start=t_last+.008, stop=times[point_i+1], step=.008)
+                t_last = subset_times[-1]
+                adjusted_times = subset_times - times[point_i]
+                subset_pos = poly(adjusted_times)
+                pos = np.concatenate((pos, subset_pos))
+                new_times = np.concatenate((new_times, subset_times))
+        else:
+            for point_i in range(len(times)):
+                v = parameters[6*point_i:6*(point_i+1)]
+                poly = np.poly1d(v)
+                time_pt = times[point_i]
+                adjusted_time = time_pt
+                if point_i >= 1:
+                    adjusted_time = time_pt - times[point_i-1]
+                subset_pos = poly(adjusted_time)
+                pos = np.concatenate((pos, subset_pos))
+
+        if(new_positions.size == 0):
+            new_positions = np.transpose(np.array([pos]))
+        else:
+            new_positions = np.hstack((new_positions, np.transpose(np.array([pos]))))
+    new_velocities = calc_derivative_from_sequence(new_positions, new_times)
+    new_accelerations = calc_derivative_from_sequence(new_velocities, new_times)
+    new_jerks = calc_derivative_from_sequence(new_accelerations, new_times)
+
+    if intermediates is False:
+        new_times = times
+
+    return new_positions, new_velocities, new_accelerations, new_jerks, new_times
+
+
 def fit_quintic_splines(positions, velocities, accelerations, times, intermediates=False):
     new_positions = np.array([])
     new_times = np.array([])
@@ -166,6 +246,7 @@ def fit_quintic_splines(positions, velocities, accelerations, times, intermediat
     return new_positions, new_velocities, new_accelerations, new_jerks, new_times
 
 def iterative_fit_quintic(positions, velocities, accelerations, times):
+    print "original times: ", times
     while(True):
         print "Going through the loop!"
         loop = False
@@ -180,33 +261,79 @@ def iterative_fit_quintic(positions, velocities, accelerations, times):
             i = last_time
             while i < len(new_times) and new_times[i] < times[t+1]:
                 for j in range(6):
-                    if abs(new_velocities[i][j]) > MAX_VEL:
-                        vtfactor = max(vtfactor, abs(new_velocities[i][j]) / MAX_VEL)
+                    #if abs(new_velocities[i][j]) > MAX_VEL:
+                    #    vtfactor = max(vtfactor, abs(new_velocities[i][j]) / MAX_VEL)
                     if abs(new_accelerations[i][j]) > MAX_ACC:
                         atfactor = max(atfactor, (abs(new_accelerations[i][j]) / MAX_ACC) ** (0.5))
                     if abs(new_jerks[i][j]) > MAX_JERK:
                         jtfactor = max(jtfactor, (abs(new_jerks[i][j]) / MAX_JERK) ** (1.0 / 3.0))
                 i += 1
-                print vtfactor, atfactor, jtfactor
+            print "factors: " , vtfactor, atfactor, jtfactor
             tf = max(vtfactor, atfactor, jtfactor)
-            tf = (tf - 1.0) / 16.0 + 1.0 # scale so it's not such a jump
-            if tf > 1.5:
+            if tf > 1.4:
                 loop = True
+            #tf = (tf - 1.0) / 16.0 + 1.0 # scale so it's not such a jump
             time_factor.append(tf)
+            last_time = i
 
         if not loop:
             break
 
         # adjust times
-        print time_factor
+        print "tfs: ", time_factor
         dt = []
         for t in range(len(times)-1):
             dt.append((times[t+1] - times[t]) * time_factor[t])
         for t in range(len(times) - 1):
             times[t+1] = times[t] + dt[t]
-        print times
+        print "adjusted times: ", times
 
     return fit_quintic_splines(positions, velocities, accelerations, times, intermediates=True)
+
+def iterative_fit_cubic(positions, velocities, accelerations, times):
+    print "original times: ", times
+    while(True):
+        print "Going through the loop!"
+        loop = False
+        time_factor = []
+        new_positions, new_velocities, new_accelerations, new_jerks, new_times = fit_cubic_splines(positions, velocities, accelerations, times, intermediates=True)
+        # Calculate time factor to try next
+        last_time = 0
+        for t in range(len(times)-1):
+            vtfactor = 1.0
+            atfactor = 1.0
+            jtfactor = 1.0
+            i = last_time
+            while i < len(new_times) and new_times[i] < times[t+1]:
+                for j in range(6):
+                    #if abs(new_velocities[i][j]) > MAX_VEL:
+                    #    vtfactor = max(vtfactor, abs(new_velocities[i][j]) / MAX_VEL)
+                    if abs(new_accelerations[i][j]) > MAX_ACC:
+                        atfactor = max(atfactor, (abs(new_accelerations[i][j]) / MAX_ACC) ** (0.5))
+                    #if abs(new_jerks[i][j]) > MAX_JERK:
+                    #    jtfactor = max(jtfactor, (abs(new_jerks[i][j]) / MAX_JERK) ** (1.0 / 3.0))
+                i += 1
+            print "factors: " , vtfactor, atfactor, jtfactor
+            tf = max(vtfactor, atfactor, jtfactor)
+            if tf > 1.4:
+                loop = True
+            tf = (tf - 1.0) / 16.0 + 1.0 # scale so it's not such a jump
+            time_factor.append(tf)
+            last_time = i
+
+        if not loop:
+            break
+
+        # adjust times
+        print "tfs: ", time_factor
+        dt = []
+        for t in range(len(times)-1):
+            dt.append((times[t+1] - times[t]) * time_factor[t])
+        for t in range(len(times) - 1):
+            times[t+1] = times[t] + dt[t]
+        print "adjusted times: ", times
+
+    return fit_cubic_splines(positions, velocities, accelerations, times, intermediates=True)
 
 
 
@@ -224,7 +351,7 @@ est_times = estimate_times(times, positions)
 
 
 # Use quintic splines, match start/end velocities and accelerations
-new_positions, new_velocities, new_accelerations, new_jerks, new_times = iterative_fit_quintic(positions, velocities, accelerations, est_times)
+new_positions, new_velocities, new_accelerations, new_jerks, new_times = iterative_fit_cubic(positions, velocities, accelerations, est_times) #, intermediates=True)
 fig, axes = plt.subplots(nrows=4, ncols=6, sharex=True, sharey=True)
 plot_waypoints(positions, velocities, accelerations, jerks, est_times, axes, "red", "x")
 plot_waypoints(new_positions, new_velocities, new_accelerations, new_jerks, new_times, axes, "blue", None)

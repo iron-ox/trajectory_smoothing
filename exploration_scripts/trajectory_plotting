@@ -216,8 +216,11 @@ def fit_quintic_splines(positions, velocities, accelerations, times, intermediat
                 v = parameters[6*point_i:6*(point_i+1)]
                 poly = np.poly1d(v)
                 subset_times = np.arange(start=t_last+.008, stop=times[point_i+1], step=.008)
+                print "delta: ", times[point_i]
+                print "subset: ", subset_times
                 t_last = subset_times[-1]
                 adjusted_times = subset_times - times[point_i]
+                print "adjust: ",  adjusted_times
                 subset_pos = poly(adjusted_times)
                 pos = np.concatenate((pos, subset_pos))
                 new_times = np.concatenate((new_times, subset_times))
@@ -351,7 +354,7 @@ est_times = estimate_times(times, positions)
 
 
 # Use quintic splines, match start/end velocities and accelerations
-new_positions, new_velocities, new_accelerations, new_jerks, new_times = iterative_fit_cubic(positions, velocities, accelerations, est_times) #, intermediates=True)
+new_positions, new_velocities, new_accelerations, new_jerks, new_times = fit_quintic_splines(positions, velocities, accelerations, est_times, intermediates=True)
 fig, axes = plt.subplots(nrows=4, ncols=6, sharex=True, sharey=True)
 plot_waypoints(positions, velocities, accelerations, jerks, est_times, axes, "red", "x")
 plot_waypoints(new_positions, new_velocities, new_accelerations, new_jerks, new_times, axes, "blue", None)

@@ -187,6 +187,7 @@ def iterative_fit_quintic(positions, velocities, accelerations, times):
                     if abs(new_jerks[i][j]) > MAX_JERK:
                         jtfactor = max(jtfactor, (abs(new_jerks[i][j]) / MAX_JERK) ** (1.0 / 3.0))
                 i += 1
+                print vtfactor, atfactor, jtfactor
             tf = max(vtfactor, atfactor, jtfactor)
             tf = (tf - 1.0) / 16.0 + 1.0 # scale so it's not such a jump
             if tf > 1.5:

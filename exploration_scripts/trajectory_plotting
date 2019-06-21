@@ -30,12 +30,12 @@ def generate_test_waypoints():
     velocities = np.array([[0,0,0,0,0,0],
                            [0,0,0,0,0,0],
                            [0,0,0,0,0,0],
-                           [0,0,0,0,0,0]])
+                           [0,0,0,0,0,0]], dtype=np.float)
     accelerations = np.array([[0,0,0,0,0,0],
                               [0,0,0,0,0,0],
                               [0,0,0,0,0,0],
-                              [0,0,0,0,0,0]])
-    times = np.array([0, 1.0, 2.0, 3.0])
+                              [0,0,0,0,0,0]], dtype=np.float)
+    times = np.array([0.0, 1.0, 2.0, 3.0])
     return (positions, velocities, accelerations, times)
 
 def calc_derivative_from_sequence(sequence, times):
@@ -89,6 +89,18 @@ def fit_cubic_splines(positions, velocities, accelerations, times, intermediates
 
         # Construct system of equations
         for point_i in range(len(times)):
+            '''if point_i is 0:
+                q[0, 0] = 2 * (times(1) - times(0))
+                q[0, 1] = times(1) - times(0)
+                x[0] = 6* ((positions[joint_i][1] - positions[joint_i][0])/(times(1) - times(0)) - velocities[joint_i][0])
+            elif point_i is len(times) - 1:
+                q[point_i, point_i] = 2 * (times(point_i) - times(point_i - 1))
+                q[point_i, point_i - 1] = times(point_i) - times(point_i - 1)
+                x[0] = 6* (velocities[joint_i][point_i] - (positions[joint_i][point_i] - positions[joint_i][point_i - 1])/(times(point_i) - times(point_i - 1)))
+            else:
+                q[point_i, point_i - 1] = times(point_i) - times(point_i - 1)
+                q[point_i, point_i] = 2 * (times(point_i + 1) - times(point_i - 1))
+                q[point_i, point_i + 1] = times(point_i + 1) - times(point_i)'''
             if point_i is 0:
                 q[:2, :4] = np.array([[        0.0,        0.0,        0.0,        1.0],
                                       [        0.0,        0.0,        1.0,        0.0]])
@@ -198,7 +210,7 @@ def fit_quintic_splines(positions, velocities, accelerations, times, intermediat
                                                                                         [  5.0*dta[1],  4.0*dta[2],  3.0*dta[3],  2.0*dta[4],  1.0*dta[5],         0.0,        0.0,        0.0,        0.0,        0.0,       -1.0,        0.0],
                                                                                         [ 20.0*dta[2], 12.0*dta[3],  6.0*dta[4],  2.0*dta[5],         0.0,         0.0,        0.0,        0.0,        0.0,       -2.0,        0.0,        0.0],
                                                                                         [ 60.0*dta[3], 24.0*dta[4],  6.0*dta[5],         0.0,         0.0,         0.0,        0.0,        0.0,       -6.0,        0.0,        0.0,        0.0],
-                                                                                        [120.0*dta[4], 24.0*dta[2],         0.0,         0.0,         0.0,         0.0,        0.0,      -24.0,        0.0,        0.0,        0.0,        0.0],
+                                                                                        [120.0*dta[4], 24.0*dta[5],         0.0,         0.0,         0.0,         0.0,        0.0,      -24.0,        1.0,        0.0,        0.0,        0.0],
                                                                                         [         0.0,         0.0,         0.0,         0.0,         0.0,         0.0,        0.0,        0.0,        0.0,        0.0,        0.0,        1.0]])
 
                 p1 = positions[point_i]
@@ -216,11 +228,8 @@ def fit_quintic_splines(positions, velocities, accelerations, times, intermediat
                 v = parameters[6*point_i:6*(point_i+1)]
                 poly = np.poly1d(v)
                 subset_times = np.arange(start=t_last+.008, stop=times[point_i+1], step=.008)
-                print "delta: ", times[point_i]
-                print "subset: ", subset_times
                 t_last = subset_times[-1]
                 adjusted_times = subset_times - times[point_i]
-                print "adjust: ",  adjusted_times
                 subset_pos = poly(adjusted_times)
                 pos = np.concatenate((pos, subset_pos))
                 new_times = np.concatenate((new_times, subset_times))
@@ -233,7 +242,9 @@ def fit_quintic_splines(positions, velocities, accelerations, times, intermediat
                 if point_i >= 1:
                     adjusted_time = time_pt - times[point_i-1]
                 subset_pos = poly(adjusted_time)
-                pos = np.concatenate((pos, subset_pos))
+                pos = np.append(pos, [subset_pos])
+                new_times = np.append(new_times, [time_pt])
+
 
         if(new_positions.size == 0):
             new_positions = np.transpose(np.array([pos]))
@@ -273,7 +284,7 @@ def iterative_fit_quintic(positions, velocities, accelerations, times):
                 i += 1
             print "factors: " , vtfactor, atfactor, jtfactor
             tf = max(vtfactor, atfactor, jtfactor)
-            if tf > 1.4:
+            if tf > 1.5:
                 loop = True
             #tf = (tf - 1.0) / 16.0 + 1.0 # scale so it's not such a jump
             time_factor.append(tf)
@@ -354,7 +365,7 @@ est_times = estimate_times(times, positions)
 
 
 # Use quintic splines, match start/end velocities and accelerations
-new_positions, new_velocities, new_accelerations, new_jerks, new_times = fit_quintic_splines(positions, velocities, accelerations, est_times, intermediates=True)
+new_positions, new_velocities, new_accelerations, new_jerks, new_times = iterative_fit_quintic(positions, velocities, accelerations, est_times) #, intermediates=True)
 fig, axes = plt.subplots(nrows=4, ncols=6, sharex=True, sharey=True)
 plot_waypoints(positions, velocities, accelerations, jerks, est_times, axes, "red", "x")
 plot_waypoints(new_positions, new_velocities, new_accelerations, new_jerks, new_times, axes, "blue", None)

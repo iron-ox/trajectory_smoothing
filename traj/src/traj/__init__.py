@@ -4,3 +4,5 @@ from seven_segment import fit_seven_segment
 import plot
 from trajectory import trajectory_for_path
 
+from traj_segment import fit_traj_segment
+from segment_planning import traj_segment_planning

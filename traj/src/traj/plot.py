@@ -6,7 +6,6 @@ joint_colors = ['r', 'b', 'g', 'c', 'm', 'y', 'k', 'w']
 """
 Plot a 1 dimensional trajectory. Plots position, velocity, acceleration, and jerk versus time
 in separate subplots.
-
 Uses the entire provided figure, adding subplots as needed.
 """
 def plot_trajectory(figure, position, velocity, acceleration, jerk, n_points=300, j_max=None,
@@ -17,7 +16,7 @@ def plot_trajectory(figure, position, velocity, acceleration, jerk, n_points=300
     velocities = np.array([velocity(t) for t in plot_times])
     accelerations = np.array([acceleration(t) for t in plot_times])
     jerks = np.array([jerk(t) for t in plot_times])
-    axes = figure.subplots(4, sharex=True)
+    fig, axes = figure.subplots(4, sharex=True)
     for joint_i in range(positions.shape[1]):
         c = joint_colors[joint_i]
         axes[0].plot(plot_times, positions[:,joint_i], c=c)

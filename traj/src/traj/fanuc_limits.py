@@ -29,7 +29,7 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
 
     The returned function object wraps the function returned by a call to
     scipy.interp2d(..), taking in current Cartesian velocity of the TCP
-    (in m/s) and current weight of the payload (in Kg) and reeturns the 2D
+    (in m/s) and current weight of the payload (in Kg) and returns the 2D
     interpolated velocity, acceleration or jerk limit based on the information
     in the provided threshold tables (see below).
 

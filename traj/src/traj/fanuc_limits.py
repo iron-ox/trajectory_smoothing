@@ -21,7 +21,7 @@ from scipy.interpolate import interp2d
 
 
 def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
-                                 cart_vmax=4e3, num_steps=20,
+                                 cart_vmax=4.0, num_steps=20,
                                  interp_func='linear'):
     """Generates a function which can be used to lookup the scaled (positive)
     limit for a joint based on the NO and MAX load threshold tables, payload
@@ -29,7 +29,7 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
 
     The returned function object wraps the function returned by a call to
     scipy.interp2d(..), taking in current Cartesian velocity of the TCP
-    (in mm/s) and current weight of the payload (in Kg) and reeturns the 2D
+    (in m/s) and current weight of the payload (in Kg) and reeturns the 2D
     interpolated velocity, acceleration or jerk limit based on the information
     in the provided threshold tables (see below).
 
@@ -58,8 +58,8 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
           list(float)
         payload_max: maximum payload supported by the robot (Kg)
           float
-        cart_vmax: maximum Cartesian velocity supported by the robot (mm/s)
-          default: 4e3
+        cart_vmax: maximum Cartesian velocity supported by the robot (m/s)
+          default: 4.0
           float
         num_steps: number of entries in a single threshold table
           default: 20
@@ -72,7 +72,7 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
         Function wrapping the return value of scipy.interp2d(..).
 
         Args:
-          cart_vel: the Cartesian velocity of the TCP (mm/s)
+          cart_vel: the Cartesian velocity of the TCP (m/s)
             float
           payload: the weight of the current payload of the robot (Kg)
             default: payload_max
@@ -86,7 +86,7 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
 
       # create interpolation function for the acceleration limits of J1, with
       # a maximum payload of 25 Kg, and the default maximum Cartesian velocity
-      # (of 4000 mm/s), default number of elements in the threshold tables (20)
+      # (of 4.0 m/s), default number of elements in the threshold tables (20)
       # and the default interpolation strategy (linear).
       j1_acc_limit_func = gen_limit_interpolation_func(
           no_load_thresh=[2050.00, 2050.00, ..],
@@ -96,11 +96,11 @@ def gen_limit_interpolation_func(no_load_thresh, max_load_thresh, payload_max,
 
       # determine acceleration limit for J1 with TCP moving at 1.5 m/s and
       # with a current payload of 6.3 Kg
-      j1_curr_acc_limit = j1_acc_limit_func(cart_vel=1.5e3, payload=6.3)[0]
+      j1_curr_acc_limit = j1_acc_limit_func(cart_vel=1.5, payload=6.3)[0]
 
-      # determine acceleration limits for J1 with TCP moving at 1100, 1350 and
-      # 1470 mm/s and the default (ie: max) payload
-      j1_acc_limits = j1_acc_limit_func(cart_vel=[1100, 1350, 1470])
+      # determine acceleration limits for J1 with TCP moving at 1.1, 1.35 and
+      # 1.47 m/s and the default (ie: max) payload
+      j1_acc_limits = j1_acc_limit_func(cart_vel=[1.1, 1.35, 1.47])
     """
     len_nlt = len(no_load_thresh)
     len_mlt = len(max_load_thresh)

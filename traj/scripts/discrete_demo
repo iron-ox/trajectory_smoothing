@@ -1,0 +1,144 @@
+#!/usr/bin/env python
+from matplotlib import pyplot as plt
+import numpy as np
+
+MAX_TIME_STEPS = 1000
+
+# How close we have to be to a given position/velocity/acceleration to consider it "reached".
+# These are needed because we are using a discrete approximation of the trajectory. These
+# should all be small enough that if you commanded zero velocity starting now, the resulting
+# deceleration would be less than the robot's limits.
+GOAL_POSITION_THRESHOLD = 0.01
+GOAL_VELOCITY_THRESHOLD = 0.1
+GOAL_ACCELERATION_THRESHOLD = 0.01
+
+
+def compute_zero_acceleration_point(p_start, p_end, v_start, a_start, j_max, delta_t):
+    assert v_start >= -GOAL_VELOCITY_THRESHOLD
+    assert a_start <= GOAL_ACCELERATION_THRESHOLD
+
+    position = p_start
+    velocity = v_start
+    acceleration = a_start
+
+    for time_i in range(MAX_TIME_STEPS):
+        if acceleration >= -GOAL_ACCELERATION_THRESHOLD:
+            # We managed to pull out of the dive.
+            return position, velocity
+
+        acceleration = acceleration + j_max * delta_t
+        velocity = velocity + acceleration * delta_t
+        position = position + velocity * delta_t
+
+    raise RuntimeError('Failed to find a solution after {} trajectory points'.format(MAX_TIME_STEPS))
+
+
+def can_reach_zero_velocity(p_start, p_end, v_start, a_start, j_max, delta_t):
+    position = p_start
+    velocity = v_start
+    acceleration = a_start
+
+    # Decelerate until our velocity drops to zero.
+    for time_i in range(MAX_TIME_STEPS):
+        best_next_jerk = None
+        for next_jerk in [0.0, -j_max]:
+            next_acceleration = acceleration + next_jerk * delta_t
+            next_velocity = velocity + next_acceleration * delta_t
+            next_position = position + next_velocity * delta_t
+
+            # Check instantaneous limits.
+            if np.abs(next_acceleration) > a_max + GOAL_ACCELERATION_THRESHOLD:
+                continue
+            elif np.abs(next_velocity) > v_max + GOAL_VELOCITY_THRESHOLD:
+                continue
+
+            if next_acceleration < -GOAL_ACCELERATION_THRESHOLD:
+                # Make sure that we don't overshoot and end up with a negative velocity.
+                p_zero, v_zero = compute_zero_acceleration_point(
+                    next_position, p_end, next_velocity, next_acceleration, j_max, delta_t)
+                if p_zero > p_end + GOAL_POSITION_THRESHOLD:
+                    # We overshot the end.
+                    continue
+                elif v_zero < -GOAL_VELOCITY_THRESHOLD:
+                    # We were decelerating too quickly and ended up with negative velocity.
+                    continue
+                elif v_zero < GOAL_VELOCITY_THRESHOLD:
+                    # We stopped in time.
+                    return True
+
+            best_next_jerk = next_jerk
+
+        if best_next_jerk is None:
+            return False
+
+        acceleration = acceleration + best_next_jerk * delta_t
+        velocity = velocity + acceleration * delta_t
+        position = position + velocity * delta_t
+
+    raise RuntimeError('Failed to find a solution after {} trajectory points'.format(MAX_TIME_STEPS))
+
+
+def parameterize_path_discrete(p_start, p_end, v_max, a_max, j_max, delta_t):
+    positions = np.zeros(MAX_TIME_STEPS)
+    velocities = np.zeros(MAX_TIME_STEPS)
+    accelerations = np.zeros(MAX_TIME_STEPS)
+    jerks = np.zeros(MAX_TIME_STEPS)
+    positions[0] = p_start
+    velocities[0] = 0.0
+    accelerations[0] = 0.0
+    jerks[0] = 0.0
+
+    for time_i in range(MAX_TIME_STEPS):
+        best_next_jerk = None
+        for next_jerk in [-j_max, 0.0, j_max]:
+            next_acceleration = accelerations[time_i - 1] + next_jerk * delta_t
+            next_velocity = velocities[time_i - 1] + next_acceleration * delta_t
+            next_position = positions[time_i - 1] + next_velocity * delta_t
+
+            if np.abs(next_acceleration) > a_max + GOAL_ACCELERATION_THRESHOLD:
+                continue
+            elif np.abs(next_velocity) > v_max + GOAL_VELOCITY_THRESHOLD:
+                continue
+
+            if not can_reach_zero_velocity(
+                    next_position, p_end, next_velocity, next_acceleration, j_max, delta_t):
+                # There will be no valid way to stop if we apply this jerk.
+                continue
+
+            if next_position >= p_end - GOAL_POSITION_THRESHOLD:
+                # Reached our goal.
+                return positions, velocities, accelerations, jerks
+
+            best_next_jerk = next_jerk
+
+        if best_next_jerk is None:
+            raise RuntimeError('No valid jerk found for timestep {}'.format(time_i))
+
+        jerks[time_i] = best_next_jerk
+        accelerations[time_i] = accelerations[time_i - 1] + best_next_jerk * delta_t
+        velocities[time_i] = velocities[time_i - 1] + accelerations[time_i] * delta_t
+        positions[time_i] = positions[time_i - 1] + velocities[time_i] * delta_t
+
+
+j_max = 10.0
+a_max = 2.0
+v_max = 10.0
+p_start = 0.0
+p_end = 30.0
+time_delta = 0.01
+
+positions, velocities, accelerations, jerks = parameterize_path_discrete(
+    p_start, p_end, v_max, a_max, j_max, time_delta)
+
+plot_times = np.arange(len(positions)) * time_delta
+axes = plt.gcf().subplots(4, sharex=True)
+axes[0].plot(plot_times, positions)
+axes[0].set_ylabel('position')
+axes[1].plot(plot_times, velocities)
+axes[1].set_ylabel('velocity')
+axes[2].plot(plot_times, accelerations)
+axes[2].set_ylabel('acceleration')
+axes[3].plot(plot_times, jerks)
+axes[3].set_ylabel('jerk')
+
+plt.show()

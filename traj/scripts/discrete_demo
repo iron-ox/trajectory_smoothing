@@ -13,7 +13,7 @@ GOAL_VELOCITY_THRESHOLD = 0.1
 GOAL_ACCELERATION_THRESHOLD = 0.01
 
 
-def compute_zero_acceleration_point(p_start, p_end, v_start, a_start, j_max, delta_t):
+def compute_zero_acceleration_point(p_start, v_start, a_start, j_max, delta_t):
     assert v_start >= -GOAL_VELOCITY_THRESHOLD
     assert a_start <= GOAL_ACCELERATION_THRESHOLD
 
@@ -33,7 +33,7 @@ def compute_zero_acceleration_point(p_start, p_end, v_start, a_start, j_max, del
     raise RuntimeError('Failed to find a solution after {} trajectory points'.format(MAX_TIME_STEPS))
 
 
-def can_reach_zero_velocity(p_start, p_end, v_start, a_start, j_max, delta_t):
+def can_reach_zero_velocity(p_start, p_end, v_start, a_start, v_max_func, a_max, j_max, delta_t):
     position = p_start
     velocity = v_start
     acceleration = a_start
@@ -49,13 +49,13 @@ def can_reach_zero_velocity(p_start, p_end, v_start, a_start, j_max, delta_t):
             # Check instantaneous limits.
             if np.abs(next_acceleration) > a_max + GOAL_ACCELERATION_THRESHOLD:
                 continue
-            elif np.abs(next_velocity) > v_max + GOAL_VELOCITY_THRESHOLD:
+            elif np.abs(next_velocity) > v_max_func(next_position) + GOAL_VELOCITY_THRESHOLD:
                 continue
 
             if next_acceleration < -GOAL_ACCELERATION_THRESHOLD:
                 # Make sure that we don't overshoot and end up with a negative velocity.
                 p_zero, v_zero = compute_zero_acceleration_point(
-                    next_position, p_end, next_velocity, next_acceleration, j_max, delta_t)
+                    next_position, next_velocity, next_acceleration, j_max, delta_t)
                 if p_zero > p_end + GOAL_POSITION_THRESHOLD:
                     # We overshot the end.
                     continue
@@ -78,7 +78,7 @@ def can_reach_zero_velocity(p_start, p_end, v_start, a_start, j_max, delta_t):
     raise RuntimeError('Failed to find a solution after {} trajectory points'.format(MAX_TIME_STEPS))
 
 
-def parameterize_path_discrete(p_start, p_end, v_max, a_max, j_max, delta_t):
+def parameterize_path_discrete(p_start, p_end, v_max_func, a_max, j_max, delta_t):
     positions = np.zeros(MAX_TIME_STEPS)
     velocities = np.zeros(MAX_TIME_STEPS)
     accelerations = np.zeros(MAX_TIME_STEPS)
@@ -97,11 +97,12 @@ def parameterize_path_discrete(p_start, p_end, v_max, a_max, j_max, delta_t):
 
             if np.abs(next_acceleration) > a_max + GOAL_ACCELERATION_THRESHOLD:
                 continue
-            elif np.abs(next_velocity) > v_max + GOAL_VELOCITY_THRESHOLD:
+            elif np.abs(next_velocity) > v_max_func(next_position) + GOAL_VELOCITY_THRESHOLD:
                 continue
 
             if not can_reach_zero_velocity(
-                    next_position, p_end, next_velocity, next_acceleration, j_max, delta_t):
+                    next_position, p_end, next_velocity, next_acceleration,
+                    v_max_func, a_max, j_max, delta_t):
                 # There will be no valid way to stop if we apply this jerk.
                 continue
 
@@ -127,14 +128,22 @@ p_start = 0.0
 p_end = 30.0
 time_delta = 0.01
 
+
+def velocity_limit_function(position):
+    return v_max + 0.7 * v_max * np.sin(np.pi * position / 7.0)
+
+
 positions, velocities, accelerations, jerks = parameterize_path_discrete(
-    p_start, p_end, v_max, a_max, j_max, time_delta)
+    p_start, p_end, velocity_limit_function, a_max, j_max, time_delta)
+
+max_velocities = np.array([velocity_limit_function(p) for p in positions])
 
 plot_times = np.arange(len(positions)) * time_delta
 axes = plt.gcf().subplots(4, sharex=True)
 axes[0].plot(plot_times, positions)
 axes[0].set_ylabel('position')
 axes[1].plot(plot_times, velocities)
+axes[1].plot(plot_times, max_velocities)
 axes[1].set_ylabel('velocity')
 axes[2].plot(plot_times, accelerations)
 axes[2].set_ylabel('acceleration')

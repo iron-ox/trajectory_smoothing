@@ -73,7 +73,8 @@ def compute_stopping_trajectory(
                 return (positions[1:time_i], velocities[1:time_i], accelerations[1:time_i],
                         jerks[1:time_i])
             elif velocities[time_i - 1] < 0.0:
-                continue
+                # We weren't reduce acceleration magnitude to zero before velocity hit zero.
+                break
 
             jerks[time_i] = j_max
             accelerations[time_i] = accelerations[time_i - 1] + jerks[time_i] * delta_t

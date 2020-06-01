@@ -78,7 +78,7 @@ def calculate_jerk_sign_and_duration(p_start, p_end, v_start, v_end, p_max, v_ma
     if(abs(p_start) > p_max):
         p_start = math.copysign(p_max, p_start)
         if (p_start*v_start>0.0) or (v_start==0 and p_start*v_end>0.0): #direction of motion 
-            print"\nWarning: \n>>> these values are not feasible,  p_start = p_max, and motion in the direction of v_start will violate p_max!"
+            rospy.debug("\nWarning: \n>>> these values are not feasible,  p_start = p_max, and motion in the direction of v_start will violate p_max!")
             raise ValueError("non feasible case: violate p_max" ) 
             
     # reject unfeasible/iillogical cases 

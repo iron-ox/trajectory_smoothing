@@ -3,7 +3,7 @@ import copy
 import numpy as np
 from sympy import Float, Matrix, Piecewise, Symbol, sin, cos
 
-from piecewise_function import PiecewiseFunction
+from .piecewise_function import PiecewiseFunction
 
 # Values smaller than this are considered to be zero to avoid numerical problems.
 PRECISION = 1e-6

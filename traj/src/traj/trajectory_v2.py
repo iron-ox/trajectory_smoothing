@@ -1,7 +1,7 @@
 import numpy as np
 from sympy import diff, Symbol
-from piecewise_function import PiecewiseFunction
-from parameterize_path import parameterize_path
+from .piecewise_function import PiecewiseFunction
+from .parameterize_path import parameterize_path
 import traj
 import rospy
 

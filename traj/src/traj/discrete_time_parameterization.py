@@ -9,10 +9,10 @@ MAX_TIME_STEPS = 10000
 POSITION_THRESHOLD = 0.01
 VELOCITY_THRESHOLD = 0.01
 ACCELERATION_THRESHOLD = 0.01
+JERK_THRESHOLD = 0.01
 
 
-def compute_stopping_trajectory(
-        p_start, p_end, v_start, a_start, is_valid, j_max, delta_t):
+def compute_stopping_trajectory(p_start, v_start, a_start, is_valid, j_max, delta_t):
     positions = np.zeros(MAX_TIME_STEPS)
     velocities = np.zeros(MAX_TIME_STEPS)
     accelerations = np.zeros(MAX_TIME_STEPS)
@@ -68,7 +68,7 @@ def compute_stopping_trajectory(
             if accelerations[time_i - 1] > -ACCELERATION_THRESHOLD:
                 return (positions[1:time_i], velocities[1:time_i], accelerations[1:time_i],
                         jerks[1:time_i])
-            elif velocities[time_i - 1] < 0.0:
+            elif velocities[time_i - 1] < -VELOCITY_THRESHOLD:
                 # We weren't reduce acceleration magnitude to zero before velocity hit zero.
                 break
 
@@ -121,7 +121,7 @@ def parameterize_path_discrete(p_start, p_end, is_valid, j_max, delta_t):
                 continue
 
             stopping_trajectory = compute_stopping_trajectory(
-                next_position, p_end, next_velocity, next_acceleration,
+                next_position, next_velocity, next_acceleration,
                 is_valid, j_max, delta_t)
             if stopping_trajectory is None:
                 # There will be no valid way to stop if we apply this jerk.

@@ -12,15 +12,11 @@ ACCELERATION_THRESHOLD = 0.01
 JERK_THRESHOLD = 0.01
 
 
-def integrate(trajectory_point, delta_t):
+def integrate(p, v, a, j, delta_t):
     """
     Propagate the trajectory forward one timestep.
     """
-    p, v, a, j = trajectory_point
-    a_next = a + j * delta_t
-    v_next = v + a * delta_t
-    p_next = p + v * delta_t
-    return p_next, v_next, a_next
+    return p + v * delta_t, v + a * delta_t, a + j * delta_t
 
 
 def smooth_end_of_trajectory(trajectory, is_valid, j_max, delta_t):
@@ -51,7 +47,7 @@ def smooth_end_of_trajectory(trajectory, is_valid, j_max, delta_t):
                 return smoothed_trajectory[:time_i + 1]
 
             smoothed_trajectory[time_i, 3] = j_max
-            smoothed_trajectory[time_i + 1, :3] = integrate(smoothed_trajectory[time_i], delta_t)
+            smoothed_trajectory[time_i + 1, :3] = integrate(*smoothed_trajectory[time_i], delta_t)
 
             if not is_valid(*smoothed_trajectory[time_i + 1, :3]):
                 break
@@ -82,7 +78,7 @@ def compute_stopping_trajectory(p_start, v_start, a_start, is_valid, j_max, delt
                 continue
 
             trajectory[time_i, 3] = j
-            trajectory[time_i + 1, :3] = integrate(trajectory[time_i], delta_t)
+            trajectory[time_i + 1, :3] = integrate(*trajectory[time_i], delta_t)
 
             # Position, velocity, and acceleration in the next timestep depend on the jerk
             # from this timestep, so we have to look one timestep into the future. In particular,
@@ -126,7 +122,7 @@ def parameterize_path_discrete(p_start, p_end, is_valid, j_max, delta_t):
 
             # Integrate trajectory forward to the next timestep using this jerk.
             trajectory[time_i, 3] = j
-            p_next, v_next, a_next = integrate(trajectory[time_i], delta_t)
+            p_next, v_next, a_next = integrate(*trajectory[time_i], delta_t)
 
             next_stopping_trajectory = compute_stopping_trajectory(
                 p_next, v_next, a_next, is_valid, j_max, delta_t)

@@ -23,40 +23,37 @@ def integrate(trajectory_point, delta_t):
     return p_next, v_next, a_next
 
 
-def smooth_end_of_trajectory():
-    # Invariant: positions, velocities, and accelerations, and jerks are set to valid values up to
-    # and including index time_i - 1.
+def smooth_end_of_trajectory(trajectory, is_valid, j_max, delta_t):
+    """
+    We start with a trajectory which reaches zero velocity if use the most negative valid jerk
+    at every timestep. Unfortunately we probably reach zero velocity with a large negative
+    acceleration. We need to reach zero velocity and zero acceleration at the same time,
+    and so need to switch from max negative jerk to max positive jerk at some timestep.
+    """
+    if trajectory[-1, 2] > -ACCELERATION_THRESHOLD:
+        # No Need to add a positive jerk section.
+        return trajectory
 
-    # This is the timestep at which we reach zero velocity if use the most negative valid jerk
-    # at every timestep. Unfortunately we probably reach zero velocity with a large negative
-    # acceleration. We need to reach zero velocity and zero acceleration at the same time,
-    # and so need to switch from max negative jerk to max positive jerk at some timestep.
-    # the next loop searches for that timestep.
-    soonest_velocity_zero_time = time_i - 1
-
-    if accelerations[soonest_velocity_zero_time] > -ACCELERATION_THRESHOLD:
-        return (positions[1:time_i],
-                velocities[1:time_i],
-                accelerations[1:time_i],
-                jerks[1:time_i])
+    smoothed_trajectory = np.tile(np.nan, (MAX_TIME_STEPS, 4))
+    smoothed_trajectory[:len(trajectory)] = trajectory
 
     # We need to add a positive jerk section.
-    for positive_jerk_start_time_i in range(soonest_velocity_zero_time, 0, -1):
-        for time_i in range(positive_jerk_start_time_i, MAX_TIME_STEPS):
-            if accelerations[time_i - 1] > -ACCELERATION_THRESHOLD:
-                return (positions[1:time_i], velocities[1:time_i], accelerations[1:time_i],
-                        jerks[1:time_i])
-            elif velocities[time_i - 1] < -VELOCITY_THRESHOLD:
+    for positive_jerk_start_time_i in range(len(trajectory) - 1, -1, -1):
+        for time_i in range(positive_jerk_start_time_i, len(smoothed_trajectory) - 1):
+            if not is_valid(*smoothed_trajectory[time_i, :3], j_max):
+                break
+
+            if smoothed_trajectory[time_i, 1] < -VELOCITY_THRESHOLD:
                 # We weren't reduce acceleration magnitude to zero before velocity hit zero.
                 break
 
-            jerks[time_i] = j_max
-            accelerations[time_i] = accelerations[time_i - 1] + jerks[time_i] * delta_t
-            velocities[time_i] = velocities[time_i - 1] + accelerations[time_i] * delta_t
-            positions[time_i] = positions[time_i - 1] + velocities[time_i] * delta_t
+            if smoothed_trajectory[time_i, 2] > -ACCELERATION_THRESHOLD:
+                return smoothed_trajectory[:time_i + 1]
 
-            if not is_valid(positions[time_i], velocities[time_i],
-                            accelerations[time_i], jerks[time_i]):
+            smoothed_trajectory[time_i, 3] = j_max
+            smoothed_trajectory[time_i + 1, :3] = integrate(smoothed_trajectory[time_i], delta_t)
+
+            if not is_valid(*smoothed_trajectory[time_i + 1, :3]):
                 break
 
     # We were unable to decelerate.
@@ -94,7 +91,7 @@ def compute_stopping_trajectory(p_start, v_start, a_start, is_valid, j_max, delt
                 continue
 
             if trajectory[time_i + 1, 1] < VELOCITY_THRESHOLD:
-                return trajectory[:time_i + 2]
+                return smooth_end_of_trajectory(trajectory[:time_i + 2], is_valid, j_max, delta_t)
 
             # We try the most desirable jerk (the one that will slow us down the fastest) first.
             # Because of this, we can stop as soon as we find a valid jerk - it is definitely

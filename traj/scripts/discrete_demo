@@ -18,12 +18,14 @@ def velocity_limit_function(position):
     return v_max + 0.7 * v_max * np.sin(np.pi * position / 1.0)
 
 
-def is_valid(position, velocity, acceleration, jerk):
+def is_valid(position, velocity, acceleration, jerk=None):
     if np.abs(acceleration) > a_max + traj.discrete_time_parameterization.ACCELERATION_THRESHOLD:
         return False
     if velocity > velocity_limit_function(position) + traj.discrete_time_parameterization.VELOCITY_THRESHOLD:
         return False
     if position < 0.0 or position > p_end + traj.discrete_time_parameterization.POSITION_THRESHOLD:
+        return False
+    if jerk is not None and np.abs(jerk) > j_max:
         return False
     return True
 

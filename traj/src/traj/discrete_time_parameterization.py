@@ -81,12 +81,17 @@ def compute_stopping_trajectory(p_start, v_start, a_start, is_valid, j_max, delt
 
         found_valid_jerk = False
         for j in (-j_max, 0.0):
-            # Check instantaneous limits.
             if not is_valid(*trajectory[time_i, :3], j):
                 continue
 
             trajectory[time_i, 3] = j
             trajectory[time_i + 1, :3] = integrate(trajectory[time_i], delta_t)
+
+            # Position, velocity, and acceleration in the next timestep depend on the jerk
+            # from this timestep, so we have to look one timestep into the future. In particular,
+            # if we don't do this check, the acceleration might become too negative.
+            if not is_valid(*trajectory[time_i + 1, :3]):
+                continue
 
             if trajectory[time_i + 1, 1] < VELOCITY_THRESHOLD:
                 return trajectory[:time_i + 2]

@@ -30,10 +30,10 @@ def is_valid(position, velocity, acceleration, jerk):
 
 print('Time parameterizing path')
 t_start = time.time()
-positions, velocities, accelerations, jerks = \
-    traj.discrete_time_parameterization.parameterize_path_discrete(
-        p_start, p_end, is_valid, j_max, time_delta)
+trajectory = traj.discrete_time_parameterization.parameterize_path_discrete(
+    p_start, p_end, is_valid, j_max, time_delta)
 print('Parameterization completed in {} seconds'.format(time.time() - t_start))
+positions, velocities, accelerations, jerks = trajectory.T
 
 max_velocities = np.array([velocity_limit_function(p) for p in positions])
 

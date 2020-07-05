@@ -109,37 +109,28 @@ def parameterize_path_discrete(p_start, p_end, is_valid, j_max, delta_t):
     trajectory = np.tile(np.nan, (MAX_TIME_STEPS, 4))
     trajectory[0][:3] = p_start, 0.0, 0.0
 
-    # Since we start with velocity and acceleration at zero, an empty stopping trajectory will do
-    # the trick.
-    stopping_trajectory = np.zeros((0, 4))
-
+    stopping_trajectory = None
     for time_i in range(MAX_TIME_STEPS):
-        found_valid_jerk = False
-        for j in [j_max, -j_max]:
-            # Check whether this jerk is instantaneously valid.
-            if not is_valid(*trajectory[time_i, :3], j):
-                continue
-
+        next_stopping_trajectory = None
+        if is_valid(*trajectory[time_i, :3], j_max):
             # Integrate trajectory forward to the next timestep using this jerk.
-            trajectory[time_i, 3] = j
-            p_next, v_next, a_next = integrate(*trajectory[time_i], delta_t)
+            p_next, v_next, a_next = integrate(*trajectory[time_i, :3], j_max, delta_t)
 
             next_stopping_trajectory = compute_stopping_trajectory(
                 p_next, v_next, a_next, is_valid, j_max, delta_t)
-            if next_stopping_trajectory is None:
-                # There will be no valid way to stop if we apply this jerk.
-                continue
 
-            # We start from the best (highest) jerk and work our way down from there, so
-            # we are done as soon as we find a jerk that lets us have a valid stopping
-            # trajectory.
+        if next_stopping_trajectory is None:
+            if stopping_trajectory is None:
+                raise RuntimeError("No valid trajectory at start")
+            else:
+                # Use the jerk from last timestep's stopping trajectory.
+                trajectory[time_i, 3] = stopping_trajectory[0, 3]
+                trajectory[time_i + 1, :3] = integrate(*trajectory[time_i], delta_t)
+                stopping_trajectory = stopping_trajectory[1:]
+        else:
+            trajectory[time_i, 3] = j_max
             stopping_trajectory = next_stopping_trajectory
-            found_valid_jerk = True
             trajectory[time_i + 1, :3] = p_next, v_next, a_next
-            break
-
-        if not found_valid_jerk:
-            raise RuntimeError('No valid jerk found for timestep {}'.format(time_i))
 
         if stopping_trajectory[-1][0] >= p_end - POSITION_THRESHOLD:
             # Reached our goal.

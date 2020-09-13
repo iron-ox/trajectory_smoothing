@@ -3,13 +3,13 @@ import numpy as np
 
 joint_colors = ['r', 'b', 'g', 'c', 'm', 'y', 'k', 'w']
 
-"""
-Plot a 1 dimensional trajectory. Plots position, velocity, acceleration, and jerk versus time
-in separate subplots.
-Uses the entire provided figure, adding subplots as needed.
-"""
 def plot_trajectory(figure, position, velocity, acceleration, jerk, n_points=300, j_max=None,
         a_max=None, v_max=None, p_max=None):
+    """
+    Plot an N-dimensional trajectory. Plots position, velocity, acceleration, and jerk versus time
+    in separate subplots.
+    Uses the entire provided figure, adding subplots as needed.
+    """
     boundaries = jerk.boundaries
     plot_times = np.linspace(position.boundaries[0], position.boundaries[-1], n_points)
     positions = np.array([position(t) for t in plot_times])
@@ -50,9 +50,15 @@ def plot_trajectory(figure, position, velocity, acceleration, jerk, n_points=300
         axes[3].vlines(boundaries, -j_max, j_max, color=(0.8, 0.8, 0.8))
     plt.legend()
 
-"""
-Plot the positions for a 2 dimensional path on the provided matplotlib axes.
-"""
+def plot_path(axes, path_function, num_points=100):
+    axes.set_title('Joint space path')
+    s_arr, path_points = path_function.sample(num_points)
+    num_joints = path_points.shape[1]
+    for joint_i in range(num_joints):
+        axes.plot(s_arr, path_points[:,joint_i], label='Joint {}'.format(joint_i))
+    axes.legend()
+
+
 def plot_2d_path(axes, piecewise_function, npoints, linewidth=1.0, label='path points'):
     """
     Plot a 2d path that is represented as a piecewise function of a single variable.

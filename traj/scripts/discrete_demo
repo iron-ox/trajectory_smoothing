@@ -1,22 +1,51 @@
 #!/usr/bin/env python
 import argparse
+import functools
 
 from matplotlib import pyplot as plt
-import matplotlib.patches
-import matplotlib.collections
 import numpy as np
 import traj
+import traj.discrete_time_parameterization
 
-def is_valid(position, velocity, acceleration, jerk=None):
-    if np.abs(acceleration) > a_max + traj.discrete_time_parameterization.ACCELERATION_THRESHOLD:
-        return False
-    if velocity > velocity_limit_function(position) + traj.discrete_time_parameterization.VELOCITY_THRESHOLD:
-        return False
-    if position < 0.0 or position > p_end + traj.discrete_time_parameterization.POSITION_THRESHOLD:
-        return False
-    if jerk is not None and np.abs(jerk) > j_max:
-        return False
+def is_valid(path_function, delta_t, position, velocity, acceleration, jerk=None):
+    # Propagate path forward in time to get positions, then convert those positions
+    # to joint space, then do discrete differentation to get the current velocity,
+    # acceleration, and jerk in joint space.
+    p_s = traj.discrete_time_parameterization.pvaj_to_pppp(
+        delta_t, position, velocity, acceleration, jerk)
+    joint_space_path = []
+    for s in p_s:
+        if s > path_function.boundaries[-1]:
+            return False
+        joint_space_path.append(path_function(s))
     return True
+
+max_velocities = np.deg2rad(np.array([
+    150.0,
+    150.0,
+    200.0,
+    300.0,
+    300.0,
+    600.0,
+]))
+
+max_accelerations = np.deg2rad(np.array([
+    500.0,
+    500.0,
+    700.0,
+    1100.0,
+    1100.0,
+    2500.0,
+]))
+
+max_jerks = np.deg2rad(np.array([
+    4500.0,
+    4500.0,
+    5000.0,
+    8000.0,
+    8000.0,
+    16000.0,
+]))
 
 # Test path
 path = np.array([
@@ -28,6 +57,7 @@ path = np.array([
 parser = argparse.ArgumentParser(description='Parameterize a geometric path.')
 parser.add_argument('--blend-radius', default=0.2, type=float,
                     help='radius of blend arcs in joint space (zero for no blending)')
+parser.add_argument('--delta-t', default=0.008, type=float, help='period of controller (s)')
 args = parser.parse_args()
 
 if args.blend_radius > 0.0:
@@ -38,14 +68,13 @@ else:
 # Plot each joint vs s.
 traj.plot.plot_path(plt.gca(), path_function)
 
+# HACK - the algorithm should try multiple jerks, instead of needing to know
+# a fixed maximum.
+j_max = min(max_jerks)
+trajectory = traj.discrete_time_parameterization.parameterize_path_discrete(
+    0.0, path_function.boundaries[-1], functools.partial(is_valid, path_function, args.delta_t),
+    j_max, args.delta_t)
 
-traj.plot.plot_trajectory(plt.figure(), trajectory_position_function, trajectory_velocity_function,
-                          trajectory_acceleration_function, trajectory_jerk_function)
-
-plt.show()
-
-# Plot the waypoints in the original path for comparison.
-plt.plot([q[0] for q in path], [q[1] for q in path], 'bx', label='original waypoints')
 
 
 plt.show()

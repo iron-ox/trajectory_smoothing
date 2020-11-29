@@ -11,12 +11,29 @@ VELOCITY_THRESHOLD = 0.001
 ACCELERATION_THRESHOLD = 0.01
 JERK_THRESHOLD = 0.01
 
+def pvaj_to_pppp(p0, v0, a0, j0, delta_t):
+    """
+    Convert position, velocity, acceleration, and jerk at one timestep to positions for
+    the next 4 timesteps.
+    """
+    a_arr = [a0, a0 + j0 * delta_t]
+    v_arr = [v0]
+    for a in a_arr:
+        v_arr.append(v_arr[-1] + delta_t * a)
+    p_arr = [p0]
+    for v in v_arr:
+        p_arr.append(p_arr[-1] + delta_t * v)
+    return p_arr
+
+def pppp_to_pvaj(pppp):
+    pass
 
 def integrate(p, v, a, j, delta_t):
     """
     Propagate the trajectory forward one timestep.
     """
     return p + v * delta_t, v + a * delta_t, a + j * delta_t
+
 
 def smooth_stop_fine_adjustment(trajectory, is_valid, j_max, delta_t, increments=10):
     """
@@ -27,9 +44,10 @@ def smooth_stop_fine_adjustment(trajectory, is_valid, j_max, delta_t, increments
     if len(trajectory) == 0:
         return trajectory
 
-    for j in np.linspace(-j_max,):
+    for j in np.linspace(-j_max, ):
         for time_i in range(len(trajectory)):
             pass
+
 
 def smooth_stop(trajectory, is_valid, j_max, delta_t):
     """
@@ -92,11 +110,11 @@ def compute_stopping_trajectory(p_start, v_start, a_start, is_valid, j_max, delt
             # Position, velocity, and acceleration in the next timestep depend on the jerk
             # from this timestep, so we have to look one timestep into the future. In particular,
             # if we don't do this check, the acceleration might become too negative.
-            if not is_valid(*trajectory[time_i + 1, :3]):
+            if not is_valid(*trajectory[time_i + 1, :3], 0.0):
                 continue
 
             if trajectory[time_i + 1, 1] < VELOCITY_THRESHOLD:
-                return smooth_stop( trajectory[:time_i + 2], is_valid, j_max, delta_t)
+                return smooth_stop(trajectory[:time_i + 2], is_valid, j_max, delta_t)
 
             # We try the most desirable jerk (the one that will slow us down the fastest) first.
             # Because of this, we can stop as soon as we find a valid jerk - it is definitely
@@ -121,6 +139,7 @@ def parameterize_path_discrete(p_start, p_end, is_valid, j_max, delta_t):
     stopping_trajectory = None
     for time_i in range(MAX_TIME_STEPS):
         next_stopping_trajectory = None
+
         if is_valid(*trajectory[time_i, :3], j_max):
             # Integrate trajectory forward to the next timestep using this jerk.
             p_next, v_next, a_next = integrate(*trajectory[time_i, :3], j_max, delta_t)

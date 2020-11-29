@@ -56,6 +56,8 @@ def plot_path(axes, path_function, num_points=100):
     num_joints = path_points.shape[1]
     for joint_i in range(num_joints):
         axes.plot(s_arr, path_points[:,joint_i], label='Joint {}'.format(joint_i))
+    axes.set_xlabel('s')
+    axes.set_ylabel('Joint values')
     axes.legend()
 
 
